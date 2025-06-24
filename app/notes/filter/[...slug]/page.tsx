@@ -7,20 +7,26 @@ import {
 import NotesClient from "./Notes.client";
 import { Note } from "@/types/note";
 
-export default async function Notes() {
+export default async function NotesPage({
+  params,
+}: {
+  params: { slug?: string[] };
+}) {
   const queryClient = new QueryClient();
 
-  const initialQuery: string = "";
-  const initialPage: number = 1;
+  const tag = params.slug?.[0];
+  const query = tag === "All" || !tag ? "" : tag;
+
+  const initialPage = 1;
 
   await queryClient.prefetchQuery({
-    queryKey: ["notes", initialQuery, initialPage],
-    queryFn: () => fetchNotes(initialQuery, initialPage),
+    queryKey: ["notes", query, initialPage],
+    queryFn: () => fetchNotes(query, initialPage),
   });
 
   const initialData = queryClient.getQueryData([
     "notes",
-    initialQuery,
+    query,
     initialPage,
   ]) as {
     notes: Note[];
@@ -30,7 +36,7 @@ export default async function Notes() {
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <NotesClient
-        query={initialQuery}
+        query={query}
         page={initialPage}
         initialData={initialData}
       />
