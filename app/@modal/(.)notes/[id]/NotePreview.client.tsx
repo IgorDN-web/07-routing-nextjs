@@ -1,6 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import {
+  QueryClient,
+  QueryClientProvider,
+  HydrationBoundary,
+  useQuery,
+} from '@tanstack/react-query';
 import { fetchNoteById } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/Modal/Modal';
@@ -8,16 +14,26 @@ import css from './NotePreview.module.css';
 
 interface NotePreviewModalProps {
   id: number;
+  dehydratedState: unknown;
 }
 
-export default function NotePreviewModal({ id }: NotePreviewModalProps) {
+export default function NotePreviewModal({
+  id,
+  dehydratedState,
+}: NotePreviewModalProps) {
+  const [queryClient] = useState(() => new QueryClient());
   const router = useRouter();
+
   const handleClose = () => router.back();
 
   return (
-    <Modal onClose={handleClose}>
-      <NoteContent id={id} onClose={handleClose} />
-    </Modal>
+    <QueryClientProvider client={queryClient}>
+      <HydrationBoundary state={dehydratedState}>
+        <Modal onClose={handleClose}>
+          <NoteContent id={id} onClose={handleClose} />
+        </Modal>
+      </HydrationBoundary>
+    </QueryClientProvider>
   );
 }
 
