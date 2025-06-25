@@ -36,7 +36,6 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-clamp: 3; /* 🧪 майбутня підтримка без префікса */
 }
 
 .button {
@@ -81,7 +80,7 @@
   padding: 6px 12px;
   font-size: 14px;
   color: #fff;
-  background-color: #0d6efd; /* синій колір */
+  background-color: #0d6efd;
   border: none;
   border-radius: 4px;
   cursor: pointer;

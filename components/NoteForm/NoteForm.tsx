@@ -1,74 +1,79 @@
-import css from "./NoteForm.module.css";
-import { Formik, Form, Field, ErrorMessage } from "formik";
-import * as Yup from "yup";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createNote } from "@/lib/api";
-import ErrorMessageText from "../ErrorMessage/ErrorMessage"; // МИ ОНОВИМО ЦЕЙ КОМПОНЕНТ ДАЛІ
-import { AxiosError } from "axios";
+'use client';
 
-// Пропс для закриття форми
+import { Formik, Form, Field, ErrorMessage } from 'formik';
+import * as Yup from 'yup';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createNote } from '@/lib/api';
+import type { NoteTag, NewNotePayload } from '../../types/note';
+import css from './NoteForm.module.css';
+
 interface NoteFormProps {
   onClose: () => void;
+  onCreateNote?: (note: NewNotePayload) => void;
 }
 
-// Типи для полів форми
-interface NoteFormValues {
+interface FormValues {
   title: string;
-  content: string; // ← зроблено не optional для сумісності з API
-  tag: "Work" | "Personal" | "Meeting" | "Shopping" | "Todo";
+  content: string;
+  tag: NoteTag;
 }
 
-// Початкові значення форми
-const initialValues: NoteFormValues = {
-  title: "",
-  content: "", // ← не undefined
-  tag: "Todo",
-};
-
-// Валідаційна схема Yup
-const Schema = Yup.object().shape({
-  title: Yup.string()
-    .required("Title is required")
-    .min(3, "Title must be at least 3 characters")
-    .max(50, "Title is too long"),
-  content: Yup.string().max(500, "Content is too long"),
-  tag: Yup.string()
-    .oneOf(
-      ["Todo", "Work", "Personal", "Meeting", "Shopping"],
-      "Invalid tag value"
-    )
-    .required("Tag is required"),
-});
-
-export default function NoteForm({ onClose }: NoteFormProps) {
+const NoteForm = ({ onClose }: NoteFormProps) => {
   const queryClient = useQueryClient();
 
-  // Мутація створення нотатки
-  const mutation = useMutation({
-    mutationFn: async (task: NoteFormValues) => createNote(task),
+  const { mutate, isPending } = useMutation({
+    mutationFn: (note: NewNotePayload) => createNote(note),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
       onClose();
+    },
+    onError: error => {
+      console.error('Failed to create note:', error);
     },
   });
 
-  const { isPending, isError, error } = mutation;
+  const validationSchema = Yup.object({
+    title: Yup.string()
+      .min(3, 'Min 3 characters')
+      .max(50, 'Max 50 characters')
+      .required('Required'),
+    content: Yup.string().max(500, 'Max 500 characters'),
+    tag: Yup.mixed<NoteTag>()
+      .oneOf(['Todo', 'Work', 'Personal', 'Meeting', 'Shopping'])
+      .required('Required'),
+  });
 
-  const handleCreateTask = (values: NoteFormValues) => {
-    mutation.mutate(values); // resetForm видалено, бо onClose викликається при успіху
+  const initialValues: FormValues = {
+    title: '',
+    content: '',
+    tag: 'Todo',
   };
 
   return (
     <Formik
       initialValues={initialValues}
-      validationSchema={Schema}
-      onSubmit={handleCreateTask}
+      validationSchema={validationSchema}
+      onSubmit={values => {
+        mutate({
+          title: values.title,
+          content: values.content.trim() === '' ? undefined : values.content,
+          tag: values.tag,
+        });
+      }}
     >
-      <Form className={css.form}>
+      <Form className={css.form} noValidate>
         <div className={css.formGroup}>
           <label htmlFor="title">Title</label>
-          <Field id="title" type="text" name="title" className={css.input} />
-          <ErrorMessage name="title" component="span" className={css.error} />
+          <Field
+            id="title"
+            name="title"
+            type="text"
+            className={css.input}
+            autoFocus
+          />
+          <ErrorMessage name="title">
+            {msg => <div className={css.error}>{msg}</div>}
+          </ErrorMessage>
         </div>
 
         <div className={css.formGroup}>
@@ -77,10 +82,12 @@ export default function NoteForm({ onClose }: NoteFormProps) {
             as="textarea"
             id="content"
             name="content"
-            rows={8}
             className={css.textarea}
+            rows={4}
           />
-          <ErrorMessage name="content" component="span" className={css.error} />
+          <ErrorMessage name="content">
+            {msg => <div className={css.error}>{msg}</div>}
+          </ErrorMessage>
         </div>
 
         <div className={css.formGroup}>
@@ -92,32 +99,31 @@ export default function NoteForm({ onClose }: NoteFormProps) {
             <option value="Meeting">Meeting</option>
             <option value="Shopping">Shopping</option>
           </Field>
-          <ErrorMessage name="tag" component="span" className={css.error} />
+          <ErrorMessage name="tag">
+            {msg => <div className={css.error}>{msg}</div>}
+          </ErrorMessage>
         </div>
 
         <div className={css.actions}>
-          <button type="button" className={css.cancelButton} onClick={onClose}>
-            Cancel
-          </button>
           <button
             type="submit"
             className={css.submitButton}
             disabled={isPending}
           >
-            {!isPending ? "Create note" : "Loading..."}
+            Create
+          </button>
+          <button
+            type="button"
+            className={css.cancelButton}
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Cancel
           </button>
         </div>
-
-        {isError && (
-          <ErrorMessageText
-            message={
-              error instanceof AxiosError
-                ? error.response?.data?.message || "Something went wrong"
-                : "An unknown error occurred"
-            }
-          />
-        )}
       </Form>
     </Formik>
   );
-}
+};
+
+export default NoteForm;

@@ -1,104 +1,114 @@
-"use client";
+'use client';
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import css from "./NotesPage.module.css";
-import NoteList from "@/components/NoteList/NoteList";
-import { fetchNotes } from "@/lib/api";
-import { useEffect, useState } from "react";
-import Pagination from "@/components/Pagination/Pagination";
-import NoteModal from "@/components/NoteModal/NoteModal";
-import SearchBox from "@/components/SearchBox/SearchBox";
-import { useDebounce } from "use-debounce";
-import { PropagateLoader } from "react-spinners";
-import ErrorMessage from "@/components/ErrorMessage/ErrorMessage";
-import { Note } from "@/types/note";
+import React, { useState } from 'react';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from '@tanstack/react-query';
+import { fetchNotes, createNote, FetchNotesResponse } from '@/lib/api';
+import type { Note } from '@/types/note';
+import NoteList from '@/components/NoteList/NoteList';
+import NoteForm from '@/components/NoteForm/NoteForm';
+import Modal from '@/components/Modal/Modal';
+import Pagination from '@/components/Pagination/Pagination';
+import SearchBox from '@/components/SearchBox/SearchBox';
+import css from './NotesPage.module.css';
+import { useDebounce } from 'use-debounce';
 
-type NotesClientProps = {
-  query: string;
-  page: number;
-  initialData: {
-    notes: Note[];
-    totalPages: number;
-  };
-};
+const PER_PAGE = Number(process.env.NEXT_PUBLIC_NOTES_PER_PAGE) || 12;
 
-export default function NotesClient({
-  query,
-  page,
-  initialData,
-}: NotesClientProps) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isModalOpen, setIsOpenModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedText] = useDebounce(searchQuery, 300);
+interface NotesClientProps {
+  initialData: FetchNotesResponse;
+  tag: string;
+}
 
-  const { data, isSuccess, isPending, isError } = useQuery({
-    queryKey: ["notes", debouncedText, currentPage],
-    queryFn: () => fetchNotes(debouncedText, currentPage),
+const NotesClient = ({ tag, initialData }: NotesClientProps) => {
+  const [page, setPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [debouncedSearchTerm] = useDebounce(searchTerm, 500);
+
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['notes', debouncedSearchTerm, page, tag],
+    queryFn: () =>
+      fetchNotes({
+        page,
+        perPage: PER_PAGE,
+        search: debouncedSearchTerm,
+        tag: tag?.toLowerCase() === 'all' || !tag?.trim() ? undefined : tag,
+      }),
+    staleTime: 1000 * 60 * 5,
     placeholderData: keepPreviousData,
     initialData:
-      debouncedText === query && currentPage === page ? initialData : undefined,
+      page === 1 && debouncedSearchTerm === '' ? initialData : undefined,
   });
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedText]);
+  const createMutation = useMutation({
+    mutationFn: createNote,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      setIsModalOpen(false);
+    },
+  });
 
-  function handleSearchChange(value: string) {
-    setSearchQuery(value);
-  }
+  const handleCreateNote = (note: {
+    title: string;
+    content?: string;
+    tag: Note['tag'];
+  }) => {
+    createMutation.mutate(note);
+  };
 
-  function handlePageChange(page: number) {
-    setCurrentPage(page);
-  }
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const totalPages = data?.totalPages || 1;
 
   return (
     <div className={css.app}>
       <header className={css.toolbar}>
-        <SearchBox inputValue={searchQuery} onChange={handleSearchChange} />
-
-        {isSuccess && data.totalPages > 1 && (
+        <SearchBox value={searchTerm} onChange={handleSearchChange} />
+        {totalPages > 1 && (
           <Pagination
-            totalPages={data.totalPages}
-            setPage={handlePageChange}
-            currentPage={currentPage}
-            pageRangeDisplayed={5}
-            marginPagesDisplayed={1}
+            pageCount={totalPages}
+            currentPage={page}
+            onPageChange={(selectedPage: number) => setPage(selectedPage)}
           />
         )}
-        <button className={css.button} onClick={() => setIsOpenModal(true)}>
-          Create note +
+        <button
+          className={css.button}
+          onClick={() => setIsModalOpen(true)}
+          disabled={createMutation.isPending}
+        >
+          {createMutation.isPending ? 'Creating...' : 'Create note +'}
         </button>
       </header>
-      {isError && <ErrorMessage />}
 
-      {isPending && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <PropagateLoader color="#0d6efd" size={11} speedMultiplier={2} />
-        </div>
-      )}
-      {isSuccess && data.notes.length > 0 && <NoteList notes={data.notes} />}
+      {isLoading && <p>Loading notes...</p>}
+      {isError && <p>Error: {(error as Error).message}</p>}
 
-      {isSuccess && data.notes.length === 0 && (
-        <p
-          style={{
-            textAlign: "center",
-            fontSize: "1.2rem",
-            marginTop: "40px",
-            color: "#888",
-          }}
-        >
-          No notes found for this search.
-        </p>
+      {data && data.notes.length > 0 && <NoteList notes={data.notes} />}
+      {data && data.notes.length === 0 && (
+        <p className={css.empty}>No notes found. Try adjusting your search.</p>
       )}
 
-      {isModalOpen && <NoteModal onClose={() => setIsOpenModal(false)} />}
+      {isModalOpen && (
+        <Modal onClose={() => setIsModalOpen(false)}>
+          <NoteForm
+            onClose={() => setIsModalOpen(false)}
+            onCreateNote={handleCreateNote}
+          />
+        </Modal>
+      )}
     </div>
   );
-}
+};
+
+export default NotesClient;
