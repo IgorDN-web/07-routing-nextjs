@@ -62,7 +62,7 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
   display: inline-block;
   background-color: transparent;
 }
