@@ -5,11 +5,17 @@ import type { Note } from '../types/note';
 const BASE_URL = 'https://notehub-public.goit.study/api';
 const token = process.env.NEXT_PUBLIC_NOTEHUB_TOKEN;
 
-const getAuthHeaders = () => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
+const getAuthHeaders = () => {
+  if (!token) {
+    throw new Error('Authorization token is missing. Please set NEXT_PUBLIC_NOTEHUB_TOKEN.');
+  }
+
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+};
 
 export interface FetchNotesParams {
   page?: number;
